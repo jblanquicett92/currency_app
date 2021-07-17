@@ -1,0 +1,5 @@
+django==3.2.5
+django-cors-headers==3.5.0
+djangorestframework==3.12.4
+psycopg2>=2.7.5, <2.8.0
+drf-yasg
