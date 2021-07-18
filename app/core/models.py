@@ -8,6 +8,9 @@ class Currency(models.Model):
     fee_percentage = models.FloatField()
     quantity = models.FloatField()
 
+    
+    
+
     def __str__(self):
         return super().__str__()
 
