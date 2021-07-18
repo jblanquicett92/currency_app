@@ -5,26 +5,17 @@ from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.generics import GenericAPIView
 
 from .models import Currency, Track_Fee
-from .serializers import CurrencySerializer, Track_FeeSerializer
+from .serializers import CurrencySerializer, Track_FeeSerializer, Track_Fee_Formatted_Serializer
+
 
 from .test import CurrencyTestCase
 from django.db import transaction
 import datetime
 
-
-# error_general = openapi.Response(
-#         description="",
-#         examples={
-#             "application/json": {
-#                 "detail": "[KeyError], [AttributeError], [DataError], [TypeError], [Exception] [Empty]",
-
-#             }
-#         }
-# )
-
-class CurrenciesView(APIView):
+class CurrenciesView(GenericAPIView):
     serializer_class =  CurrencySerializer
     
     def post(self, request, *args, **kwargs):
@@ -49,9 +40,7 @@ class CurrenciesView(APIView):
         else:
             return Response({'result': 'success', 'new_currency':serializer.data}, status=status.HTTP_201_CREATED)
             
-
     def get(self, request, name=None):
-
 
         if name:
             name_upper=name.upper()
@@ -69,7 +58,7 @@ class CurrenciesView(APIView):
 
 
 
-class Check_exchange_rate(APIView):
+class Check_exchange_rate(GenericAPIView):
     serializer_class =  CurrencySerializer
     
     def get(self, request, base, quote):
@@ -116,8 +105,8 @@ class Check_exchange_rate(APIView):
     
 
     
-class Change_currency(APIView):
-    
+class Change_currency(GenericAPIView):
+    serializer_class = Track_Fee_Formatted_Serializer
     def post(self, request, *args, **kwargs):
         change_currency_data = request.data
         base_upper=change_currency_data['base'].upper()
@@ -140,7 +129,7 @@ class Change_currency(APIView):
                    'base_new_quantity':track_fee.base_currency.quantity,
                    'quote_currency':track_fee.quote_currency.name,
                    'quote_new_quantity':track_fee.quote_currency.quantity,
-                   'fee_amount':track_fee.fee_amount
+                   'fee_amount':f'{track_fee.fee_amount} {track_fee.base_currency.name}'
                    
                    }, status=status.HTTP_200_OK)
             else:

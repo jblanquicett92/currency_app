@@ -12,7 +12,7 @@ schema_view = get_schema_view(
       description="Documentacion publica Qualifinds",
       terms_of_service="https://www.google.com/policies/terms/",
       contact=openapi.Contact(email="jorgeabm1992@gmail.com"),
-      license=openapi.License(name="BSD License"),
+      license=openapi.License(name="MIT"),
    ),
    public=True,
    permission_classes=(permissions.AllowAny,),
