@@ -5,11 +5,13 @@ class CurrencySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Currency
-        fields = ("__all__")
+        #fields = ("__all__")
+        exclude = ('id_currency',)
 
 
 class Track_FeeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Track_Fee
-        fields = ("__all__")
+        #fields = ("__all__")
+        exclude = ('id_track_fee',)
