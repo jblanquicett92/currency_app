@@ -27,22 +27,12 @@ import datetime
 class CurrenciesView(APIView):
     serializer_class =  CurrencySerializer
     
-    def is_currency_exists(self, name):
-        
-        try:
-            Currency.objects.get(name=name)
-        except Currency.DoesNotExist:
-            return False
-        return True
-
-
-
     def post(self, request, *args, **kwargs):
         currency_data = request.data
         new_currency = Currency()
         try:
             name_upper=currency_data["name"].upper()
-            if self.is_currency_exists(name_upper):
+            if is_currency_exists(name_upper):
                 return Response({'result': 'Currency already exixst'}, status=status.HTTP_400_BAD_REQUEST)
             else:
 
@@ -62,10 +52,11 @@ class CurrenciesView(APIView):
 
     def get(self, request, name=None):
 
-        if name:
 
+        if name:
+            name_upper=name.upper()
             try:
-                queryset = Currency.objects.get(name=name)
+                queryset = Currency.objects.get(name=name_upper)
             except Currency.DoesNotExist:
                 return Response({'result': 'we couldn’t find the currency'}, status=status.HTTP_404_NOT_FOUND)
             serializer = CurrencySerializer(queryset)
@@ -115,7 +106,7 @@ class Check_exchange_rate(APIView):
         return Response(
             {
             'result': 'success', 
-            'documentation':"http://127.0.0.1:8000/swagger/",
+            'documentation':"http://127.0.0.1:8000/redoc/",
             'current_time': datetime.datetime.now(),
             'base': base_upper,
             'quote': quote_upper,            
@@ -126,7 +117,46 @@ class Check_exchange_rate(APIView):
 
     
 class Change_currency(APIView):
-    pass
+    
+    def post(self, request, *args, **kwargs):
+        change_currency_data = request.data
+        base_upper=change_currency_data['base'].upper()
+        quote_upper=change_currency_data['quote'].upper()
+        if is_currency_exists(base_upper) and is_currency_exists(quote_upper):
+            base = Currency.objects.get(name=base_upper)
+            quote = Currency.objects.get(name=quote_upper)
+            money_request = change_currency_data['money_request']
+            money_to_fulfill_request= calc_money_to_fulfill_request(money_request, base, quote)
+            
+            if money_to_fulfill_request[2]:
+               track_fee = create_track_fee(money_request, base, quote)
+               serializer = Track_FeeSerializer(track_fee)
+               return Response(
+                   {
+                   'result': 'success',
+                   'documentation': 'http://127.0.0.1:8000/redoc/',
+                   'date_transaction':track_fee.date_transaction,
+                   'base_currency':track_fee.base_currency.name,
+                   'base_new_quantity':track_fee.base_currency.quantity,
+                   'quote_currency':track_fee.quote_currency.name,
+                   'quote_new_quantity':track_fee.quote_currency.quantity,
+                   'fee_amount':track_fee.fee_amount
+                   
+                   }, status=status.HTTP_200_OK)
+            else:
+                return Response({'result': 'cant fulfill request'}, status=status.HTTP_404_NOT_FOUND)
+
+        print(request.data)
+        return Response({'result': 'HTTP_404_NOT_FOUND'}, status=status.HTTP_404_NOT_FOUND)
+
+
+def is_currency_exists(name):
+    try:
+        Currency.objects.get(name=name)
+    except Currency.DoesNotExist:
+        return False
+    return True
+
 
 def calc_ex_rate(base_currency, quote_currency):
     fee = base_currency.fee_percentage+quote_currency.fee_percentage
@@ -154,13 +184,13 @@ def calc_money_to_fulfill_request(money_request, base, quote):
         new_quote.quantity-=quote_request
 
         if new_quote.quantity <=0:
-            list_new_quantity = [new_base, new_quote]
+            list_new_quantity = [new_base, new_quote, False]
             return list_new_quantity
         else:
             new_base.save()
             new_quote.save()
 
-            list_new_quantity = [new_base, new_quote]
+            list_new_quantity = [new_base, new_quote, True]
             print(f'{new_quote.quantity} - {new_base.quantity}')
             return list_new_quantity
     
