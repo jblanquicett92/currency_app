@@ -13,6 +13,9 @@ RUN mkdir /app
 WORKDIR /app
 COPY ./app /app
 
-RUN adduser -D myuser
-USER myuser
 
+EXPOSE 8000
+
+#CMD ["gunicorn", "--bind", ":8000", "app.wsgi:application"]
+
+CMD gunicorn app.wsgi:application --bind 0.0.0.0:$PORT

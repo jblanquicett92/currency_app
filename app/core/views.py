@@ -115,28 +115,32 @@ class Change_currency(GenericAPIView):
             base = Currency.objects.get(name=base_upper)
             quote = Currency.objects.get(name=quote_upper)
             money_request = change_currency_data['money_request']
-            money_to_fulfill_request= calc_money_to_fulfill_request(money_request, base, quote)
             
-            if money_to_fulfill_request[2]:
-               track_fee = create_track_fee(money_request, base, quote)
-               serializer = Track_FeeSerializer(track_fee)
-               return Response(
-                   {
-                   'result': 'success',
-                   'documentation': 'http://127.0.0.1:8000/redoc/',
-                   'date_transaction':track_fee.date_transaction,
-                   'base_currency':track_fee.base_currency.name,
-                   'base_new_quantity':track_fee.base_currency.quantity,
-                   'quote_currency':track_fee.quote_currency.name,
-                   'quote_new_quantity':track_fee.quote_currency.quantity,
-                   'fee_amount':f'{track_fee.fee_amount} {track_fee.base_currency.name}'
-                   
-                   }, status=status.HTTP_200_OK)
+            if money_request<=0:
+                return Response({'result': 'Money request couldn’t be 0'}, status=status.HTTP_200_OK)
             else:
-                return Response({'result': 'cant fulfill request'}, status=status.HTTP_404_NOT_FOUND)
+                money_to_fulfill_request= calc_money_to_fulfill_request(money_request, base, quote)
+                
+                if money_to_fulfill_request[2]:
+                    track_fee = create_track_fee(money_request, base, quote)
+                    serializer = Track_FeeSerializer(track_fee)
+                    return Response(
+                        {
+                        'result': 'success',
+                        'documentation': 'http://127.0.0.1:8000/redoc/',
+                        'date_transaction':track_fee.date_transaction,
+                        'base_currency':track_fee.base_currency.name,
+                        'base_new_quantity':track_fee.base_currency.quantity,
+                        'quote_currency':track_fee.quote_currency.name,
+                        'quote_new_quantity':track_fee.quote_currency.quantity,
+                        'fee_amount':f'{track_fee.fee_amount} {track_fee.base_currency.name}'
+                        
+                        }, status=status.HTTP_200_OK)
+                else:
+                    return Response({'result': 'cant fulfill request'}, status=status.HTTP_200_OK)
 
-        print(request.data)
-        return Response({'result': 'HTTP_404_NOT_FOUND'}, status=status.HTTP_404_NOT_FOUND)
+                print(request.data)
+                return Response({'result': 'we couldn’t found the currency'}, status=status.HTTP_404_NOT_FOUND)
 
 
 def is_currency_exists(name):
