@@ -8,12 +8,30 @@ from rest_framework.views import APIView
 from rest_framework.generics import GenericAPIView
 
 from .models import Currency, Track_Fee
-from .serializers import CurrencySerializer, Track_FeeSerializer, Track_Fee_Formatted_Serializer
+from .serializers import CurrencySerializer, Track_FeeSerializer, Track_Fee_Formatted_Serializer, Track_Fee_GetFormatted_Serializer
+from .serializers import setup_Serializer
 
+from .setup import AutoGenerateCurrencies
 
 from .test import CurrencyTestCase
 from django.db import transaction
 import datetime
+
+
+
+class Setup(GenericAPIView):
+    serializer_class = setup_Serializer
+    def post(self, request, *args, **kwargs):
+
+        generate_data = request.data
+
+        generate=generate_data['generate']
+
+        if generate:
+            generate_auto_currencies()
+            return Response({'result': 'you have generated EUR, USD, JPY, GBP, CHF, AUD, CAD y NZD. currencies'}, status=status.HTTP_201_CREATED)
+        return Response({'result': 'unexpected request'}, status=status.HTTP_400_BAD_REQUEST)
+    
 
 class CurrenciesView(GenericAPIView):
     serializer_class =  CurrencySerializer
@@ -58,7 +76,7 @@ class CurrenciesView(GenericAPIView):
 
 
 
-class Check_exchange_rate(GenericAPIView):
+class Check_exchange_rateView(GenericAPIView):
     serializer_class =  CurrencySerializer
     
     def get(self, request, base, quote):
@@ -83,14 +101,14 @@ class Check_exchange_rate(GenericAPIView):
                 return Response({'result': 'we couldn’t find the currency'}, status=status.HTTP_404_NOT_FOUND)
             serializer_quote = CurrencySerializer(quote_currency)
         
-        print(base_currency.name)
-        print(quote_currency.name)
+        #print(base_currency.name)
+        #print(quote_currency.name)
 
         fee_cost=calc_ex_rate(base_currency, quote_currency)
         base_to_quote=calc_base_to_quote(base_currency, quote_currency)
 
-        print(fee_cost)
-        print(base_to_quote)
+        #print(fee_cost)
+        #print(base_to_quote)
         
         return Response(
             {
@@ -122,18 +140,22 @@ class Change_currency(GenericAPIView):
                 money_to_fulfill_request= calc_money_to_fulfill_request(money_request, base, quote)
                 
                 if money_to_fulfill_request[2]:
+                    conversion_rate=money_to_fulfill_request[3]
                     track_fee = create_track_fee(money_request, base, quote)
                     serializer = Track_FeeSerializer(track_fee)
                     return Response(
                         {
                         'result': 'success',
-                        'documentation': 'http://127.0.0.1:8000/redoc/',
+                        'documentation': 'http://127.0.0.1:8000/swagger/',
                         'date_transaction':track_fee.date_transaction,
+                        'money_request':track_fee.money_request,
                         'base_currency':track_fee.base_currency.name,
-                        'base_new_quantity':track_fee.base_currency.quantity,
+                        'base_new_quantity':track_fee.base_currency.quantity,                        
                         'quote_currency':track_fee.quote_currency.name,
                         'quote_new_quantity':track_fee.quote_currency.quantity,
-                        'fee_amount':f'{track_fee.fee_amount} {track_fee.base_currency.name}'
+                        'fee_amount':f'{track_fee.fee_amount} {track_fee.base_currency.name}',
+                        'base_request':f'{track_fee.money_request} {track_fee.base_currency.name}',
+                        'conversion_rate':f'{conversion_rate} {track_fee.quote_currency.name}'
                         
                         }, status=status.HTTP_200_OK)
                 else:
@@ -141,6 +163,25 @@ class Change_currency(GenericAPIView):
 
                 print(request.data)
                 return Response({'result': 'we couldn’t found the currency'}, status=status.HTTP_404_NOT_FOUND)
+
+class TrackFeeView(GenericAPIView):
+    serializer_class = Track_Fee_GetFormatted_Serializer
+
+    def get(self, request, id=None):
+        track_fees = Track_Fee.objects.all()
+        serializer = Track_FeeSerializer(track_fees, many=True)
+        fees=[]
+        for e in Track_Fee.objects.all():
+            fee={
+                "fee_amount": e.fee_amount,
+                'money_request':e.money_request,
+                "date_transaction": e.date_transaction,
+                "base_currency": e.base_currency.name,
+                "quote_currency": e.quote_currency.name
+            }
+            fees.append(fee)
+        return Response({'result':'success', 'fees':fees})
+ 
 
 
 def is_currency_exists(name):
@@ -183,7 +224,7 @@ def calc_money_to_fulfill_request(money_request, base, quote):
             new_base.save()
             new_quote.save()
 
-            list_new_quantity = [new_base, new_quote, True]
+            list_new_quantity = [new_base, new_quote, True, quote_request]
             print(f'{new_quote.quantity} - {new_base.quantity}')
             return list_new_quantity
     
@@ -199,7 +240,73 @@ def create_track_fee(money_request, base, quote):
     tf = Track_Fee.objects.create(
         fee_amount=fee_amount_float_formatted,
         date_transaction=datetime.datetime.now(),
+        money_request=money_request_float_format,
         base_currency=base,
         quote_currency=quote
     )
     return tf
+
+def generate_auto_currencies():
+
+    EUR=Currency.objects.create(
+                name='EUR',
+                exchange=1.18,
+                fee_percentage=0.01,
+                quantity=1000
+    )
+    EUR.save()
+
+    USD=Currency.objects.create(
+                name='USD'.upper(),
+                exchange=1,
+                fee_percentage=0.0015,
+                quantity=1000
+            )
+    USD.save()
+
+    JPY=Currency.objects.create(
+                name='JPY',
+                exchange=0.0091,
+                fee_percentage=0.0113,
+                quantity=1000
+    )
+    JPY.save()
+
+    GBP=Currency.objects.create(
+                name='GBP',
+                exchange=2.11,
+                fee_percentage=0.0033,
+                quantity=1000
+    )
+    GBP.save()
+
+    CHF=Currency.objects.create(
+                name='CHF',
+                exchange=0.78,
+                fee_percentage=0.0089,
+                quantity=1000            )
+    CHF.save()
+
+    AUD=Currency.objects.create(
+                name='AUD',
+                exchange=0.73,
+                fee_percentage=0.0015,
+                quantity=1000
+    )
+    AUD.save()
+
+    CAD=Currency.objects.create(
+                name='CAD',
+                exchange=0.78,
+                fee_percentage=0.034,
+                quantity=1000
+    )
+    CAD.save()
+
+    NZD=Currency.objects.create(
+        name='NZD',
+                exchange=0.69,
+                fee_percentage=0.0041,
+                quantity=1000
+            )
+    NZD.save()
