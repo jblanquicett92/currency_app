@@ -5,6 +5,8 @@ import datetime
 
 class CurrencyTestCase(TestCase):
 
+    #Inicializo casos de prueba de monedas para 
+    #posterior validación
     def setUp(self):
 
         Currency.objects.create(
@@ -32,7 +34,7 @@ class CurrencyTestCase(TestCase):
             quantity=1000
         )
     
-    #test validar que se guarda en mayusculas las divisas
+    #Prueba unitaria que divisa se guarda en mayúsculas
     def test_upper_name(self):
 
        currency_A = Currency.objects.get(name='eur'.upper())
@@ -40,9 +42,9 @@ class CurrencyTestCase(TestCase):
 
        self.assertEqual(currency_A.name, "EUR")
        self.assertEqual(currency_B.name, "CHF")
-    
+              
 
-    #test para validar el porcentaje por transacción
+    #Prueba unitaria de porcentaje por transacción
     def test_exchange_rate(self):
 
         gbp = Currency.objects.get(name="GBP")
@@ -57,7 +59,7 @@ class CurrencyTestCase(TestCase):
         self.assertEqual(result_1, 0.028)
         self.assertEqual(result_2, 0.008)
 
-    #test para validar el intercambio de divisas
+    #Prueba unitaria de intercambio de divisas
     def test_base_to_quote(self):
 
         gbp = Currency.objects.get(name="GBP")
@@ -76,7 +78,7 @@ class CurrencyTestCase(TestCase):
         self.assertEqual(result_3, 2.705)
         self.assertEqual(result_4, 0.847)
 
-    #Test para validar capacidad de intercambio de divisas
+    #Prueba unitaria de capacidad de intercambio de divisas
     def test_money_to_fulfill_request(self):
         
         request_1 = 80
@@ -88,23 +90,30 @@ class CurrencyTestCase(TestCase):
 
         base_quote= self.calc_money_to_fulfill_request(request_1, base, quote)
 
-        #caso 1, restando a diviza cotizada, para probar funcionamiento correcto
+        #caso 1, restando a divisa cotizada, para probar funcionamiento correcto
+        #[0] base_quote: regresa los valor de base actualizado
+        #[1] base_quote: regresa los valor de cotizacion actualizado
         self.assertEqual(base_quote[0].quantity, 1080)
         self.assertEqual(base_quote[1].quantity, 856.96)
 
-        #caso 2, Se sigue restando a diviza cotizada, para probar funcionamiento correcto
+        #caso 2, Se sigue restando a divisa cotizada, para probar funcionamiento correcto
+        #[0] base_quote: regresa los valor de base actualizado
+        #[1] base_quote: regresa los valor de cotizacion actualizado
         base_quote2= self.calc_money_to_fulfill_request(request_2, base, quote)
         self.assertEqual(base_quote2[0].quantity, 1125)
         self.assertEqual(base_quote2[1].quantity, 776.5)
 
-        #caso 3, validacion de disponibilidad de dinero
+        #caso 3, validación de disponibilidad de dinero
+        #[0] base_quote: regresa los valor de base sin actualizar
+        #[1] base_quote: regresa los valor de cotización sin actualizar
         base_quote3= self.calc_money_to_fulfill_request(request_3, base, quote)
         self.assertEqual(base_quote2[0].quantity, 1125)
         self.assertEqual(base_quote2[1].quantity, 776.5)
 
+    #Prueba unitaria de registro correcto de flete en objeto track_fee 
     def test_crete_track_fee(self):
-        request_1 = 40
-        
+
+        request_1 = 40        
         base = Currency.objects.get(name="gbp".upper())
         quote = Currency.objects.get(name="eur".upper())
 
@@ -112,7 +121,7 @@ class CurrencyTestCase(TestCase):
         self.assertEqual(track_fee.fee_amount, 2.3632)
 
 
-    #valide con una prueba de unidad que la tarifa se está calculando correctamente.
+    #Algoritmo que calcula que tarifa se está calculando correctamente.
     def calc_ex_rate(self, base_currency, quote_currency):
 
         fee = base_currency.fee_percentage+quote_currency.fee_percentage
@@ -120,37 +129,43 @@ class CurrencyTestCase(TestCase):
         formatted_float = "{:.3f}".format(fee_cost)
         return float(formatted_float)
     
-    #
+    #Algoritmo que calcula que cambio de divisa
     def calc_base_to_quote(self, base_currency, quote_currency):
+
         base_to_quote = base_currency.exchange/quote_currency.exchange
         base_to_quote_float = "{:.3f}".format(base_to_quote)
         return float(base_to_quote_float)
 
+    #Algoritmo de calculo de capacidad de cambio de divisa
     @transaction.atomic
     def calc_money_to_fulfill_request(self, money_request, base, quote):
-        base_to_quote=self.calc_base_to_quote(base, quote)
-        
+
+        base_to_quote=self.calc_base_to_quote(base, quote)        
         quote_request=base_to_quote*money_request
 
         new_base = Currency.objects.select_for_update().get(name=base.name)
         new_quote = Currency.objects.select_for_update().get(name=quote.name)
 
+        #Se asegura que la transacción cuente con propiedades de atomicidad
         with transaction.atomic():
 
             new_base.quantity+=money_request
             new_quote.quantity-=quote_request
 
             if new_quote.quantity <=0:
+                #regresa los valor de base y cotización sin actualizar
                 list_new_quantity = [new_base, new_quote]
                 return list_new_quantity
             else:
+
                 new_base.save()
                 new_quote.save()
-
+            
+            #regresa los valor de base y cotización actualizados
             list_new_quantity = [new_base, new_quote]
-            print(f'{new_quote.quantity} - {new_base.quantity}')
             return list_new_quantity
     
+    #Algoritmo para crear un track_fee
     def create_track_fee(self, money_request, base, quote):
 
         money_request_float_format = float(money_request)

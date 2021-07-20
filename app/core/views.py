@@ -1,30 +1,31 @@
-from django.db.utils import DataError
-from django.shortcuts import render
-from drf_yasg import openapi
-from drf_yasg.utils import swagger_auto_schema
-from rest_framework import status, viewsets
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework.generics import GenericAPIView
-
-from .models import Currency, Track_Fee
-from .serializers import CurrencySerializer, Track_FeeSerializer, Track_Fee_Formatted_Serializer, Track_Fee_GetFormatted_Serializer
-from .serializers import setup_Serializer
-
-from .setup import AutoGenerateCurrencies
-
-from .test import CurrencyTestCase
-from django.db import transaction
 import datetime
 
+from django.db import transaction
+from django.db.utils import DataError
+from django.shortcuts import render
 
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
 
+from rest_framework import status, viewsets
+from rest_framework.generics import GenericAPIView
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from .models import Currency, Track_Fee
+from .serializers import (CurrencySerializer, Track_Fee_Formatted_Serializer,setup_Serializer)
+from .setup import AutoGenerateCurrencies
+from .test import CurrencyTestCase
+
+#View encargada de auto generar una serie de monedas con datos quemados por el método
+#Observación: Es importante que solo sea usada una vez
 class Setup(GenericAPIView):
     serializer_class = setup_Serializer
     def post(self, request, *args, **kwargs):
 
         generate_data = request.data
 
+        #Desde el serializer el valor de generate sera de tipo booleano
         generate=generate_data['generate']
 
         if generate:
@@ -32,7 +33,7 @@ class Setup(GenericAPIView):
             return Response({'result': 'you have generated EUR, USD, JPY, GBP, CHF, AUD, CAD y NZD. currencies'}, status=status.HTTP_201_CREATED)
         return Response({'result': 'unexpected request'}, status=status.HTTP_400_BAD_REQUEST)
     
-
+#View encargada de crear monedas, (listarlas y consultarlas)
 class CurrenciesView(GenericAPIView):
     serializer_class =  CurrencySerializer
     
@@ -40,11 +41,11 @@ class CurrenciesView(GenericAPIView):
         currency_data = request.data
         new_currency = Currency()
         try:
+            #Asegurar que la moneda este en mayuscula
             name_upper=currency_data["name"].upper()
             if is_currency_exists(name_upper):
                 return Response({'result': 'Currency already exixst'}, status=status.HTTP_400_BAD_REQUEST)
             else:
-
                 new_currency.name = name_upper
                 new_currency.exchange = currency_data["exchange"]
                 new_currency.fee_percentage = currency_data["fee_percentage"]
@@ -74,10 +75,9 @@ class CurrenciesView(GenericAPIView):
             serializer = CurrencySerializer(queryset, many=True)
             return Response(serializer.data)
 
-
-
+#View encargada de retornar el tipo de cambio entre una divisa base y una de cotización
 class Check_exchange_rateView(GenericAPIView):
-    serializer_class =  CurrencySerializer
+    #serializer_class =  CurrencySerializer
     
     def get(self, request, base, quote):
 
@@ -90,30 +90,20 @@ class Check_exchange_rateView(GenericAPIView):
                 base_currency = Currency.objects.get(name=base_upper)
             except Currency.DoesNotExist:
                 return Response({'result': 'we couldn’t find the currency'}, status=status.HTTP_404_NOT_FOUND)
-            serializer_base = CurrencySerializer(base_currency)
-            
-        
+                    
         if quote_upper:
 
             try:
                 quote_currency = Currency.objects.get(name=quote_upper)
             except Currency.DoesNotExist:
                 return Response({'result': 'we couldn’t find the currency'}, status=status.HTTP_404_NOT_FOUND)
-            serializer_quote = CurrencySerializer(quote_currency)
-        
-        #print(base_currency.name)
-        #print(quote_currency.name)
 
         fee_cost=calc_ex_rate(base_currency, quote_currency)
         base_to_quote=calc_base_to_quote(base_currency, quote_currency)
 
-        #print(fee_cost)
-        #print(base_to_quote)
-        
-        return Response(
-            {
+        return Response({
             'result': 'success', 
-            'documentation':"http://127.0.0.1:8000/redoc/",
+            'documentation':"http://127.0.0.1:8000/swagger/",
             'current_time': datetime.datetime.now(),
             'base': base_upper,
             'quote': quote_upper,            
@@ -122,13 +112,17 @@ class Check_exchange_rateView(GenericAPIView):
             }, status=status.HTTP_200_OK)
     
 
-    
+#View encargada de cambiar divisas, recibe mediante el metodo post
+#una moneda base, y de cotizacion
 class Change_currency(GenericAPIView):
     serializer_class = Track_Fee_Formatted_Serializer
     def post(self, request, *args, **kwargs):
+        
         change_currency_data = request.data
         base_upper=change_currency_data['base'].upper()
         quote_upper=change_currency_data['quote'].upper()
+
+        #is_currency_exists regresa valor booleano en caso de que exista o no la moneda  
         if is_currency_exists(base_upper) and is_currency_exists(quote_upper):
             base = Currency.objects.get(name=base_upper)
             quote = Currency.objects.get(name=quote_upper)
@@ -137,12 +131,18 @@ class Change_currency(GenericAPIView):
             if money_request<=0:
                 return Response({'result': 'Money request couldn’t be 0'}, status=status.HTTP_200_OK)
             else:
+                #calc_money_to_fulfill_request: método testeado para validar 
+                #si contamos con la capacidad de cambiar la divisa 
                 money_to_fulfill_request= calc_money_to_fulfill_request(money_request, base, quote)
-                
+                #calc_money_to_fulfill_request: regresa una lista
+                #[0]Moneda Base
+                #[1]Moneda Cotización
+                #[2]True si podemos hacer el cambio o False si no 
+                #[3]Solicitud de dinero a moneda de cotización
                 if money_to_fulfill_request[2]:
                     conversion_rate=money_to_fulfill_request[3]
                     track_fee = create_track_fee(money_request, base, quote)
-                    serializer = Track_FeeSerializer(track_fee)
+                    
                     return Response(
                         {
                         'result': 'success',
@@ -161,15 +161,14 @@ class Change_currency(GenericAPIView):
                 else:
                     return Response({'result': 'cant fulfill request'}, status=status.HTTP_200_OK)
 
-                print(request.data)
+               # print(request.data)
                 return Response({'result': 'we couldn’t found the currency'}, status=status.HTTP_404_NOT_FOUND)
 
+#View encargada de listar todas las transacciones de cambios de divisas
 class TrackFeeView(GenericAPIView):
-    serializer_class = Track_Fee_GetFormatted_Serializer
 
     def get(self, request, id=None):
         track_fees = Track_Fee.objects.all()
-        serializer = Track_FeeSerializer(track_fees, many=True)
         fees=[]
         for e in Track_Fee.objects.all():
             fee={
@@ -183,7 +182,7 @@ class TrackFeeView(GenericAPIView):
         return Response({'result':'success', 'fees':fees})
  
 
-
+#funcion con capacidad de validar si existe una moneda por su nombre
 def is_currency_exists(name):
     try:
         Currency.objects.get(name=name)
@@ -191,18 +190,20 @@ def is_currency_exists(name):
         return False
     return True
 
-
+#funcion validada por prueba unitaria en test (Ver mas en Test)
 def calc_ex_rate(base_currency, quote_currency):
     fee = base_currency.fee_percentage+quote_currency.fee_percentage
     fee_cost = base_currency.exchange*fee
     formatted_float = "{:.4f}".format(fee_cost)
     return float(formatted_float)
 
+#funcion validada por prueba unitaria en test (Ver mas en Test)
 def calc_base_to_quote(base_currency, quote_currency):
     base_to_quote = base_currency.exchange/quote_currency.exchange
     base_to_quote_float = "{:.3f}".format(base_to_quote)
     return float(base_to_quote_float)
 
+#funcion validada por prueba unitaria en test (Ver mas en Test)
 @transaction.atomic
 def calc_money_to_fulfill_request(money_request, base, quote):
     base_to_quote=calc_base_to_quote(base, quote)
@@ -225,9 +226,11 @@ def calc_money_to_fulfill_request(money_request, base, quote):
             new_quote.save()
 
             list_new_quantity = [new_base, new_quote, True, quote_request]
-            print(f'{new_quote.quantity} - {new_base.quantity}')
+           # print(f'{new_quote.quantity} - {new_base.quantity}')
             return list_new_quantity
-    
+
+
+#funcion validada por prueba unitaria en test (Ver mas en Test)
 def create_track_fee(money_request, base, quote):
 
     money_request_float_format = float(money_request)
@@ -246,6 +249,7 @@ def create_track_fee(money_request, base, quote):
     )
     return tf
 
+#funcion con el proposito de generar desde datos estáticos serie de monedas
 def generate_auto_currencies():
 
     EUR=Currency.objects.create(

@@ -1,11 +1,14 @@
-#Teniendo como descripción primaria (Construcción de API de cambio de divisas)
-#Descripciones secundarias:
-# 1. Consultar un tipo de cambio
-# 2. Cambiar una divisa
-# 3. 
-
 from django.db import models
 
+
+#exchange: valor de cotización de moneda
+#fee_percentage: porcentaje de flete
+
+#nota: 
+# 1. exchange USD = 1 para los datos burndown (Quemado, atogenerados..etc), por ser la moneda base
+# el resto de valores son aleatorios (que por efecto de practicidad use de google *USD TO CAD*)
+
+#La función de la clase Currency es poder almacenar monedas
 class Currency(models.Model):
     id_currency = models.AutoField(primary_key=True)
     name = models.CharField(max_length=4)
@@ -16,18 +19,9 @@ class Currency(models.Model):
 
     def __str__(self):
         return super().__str__()
-    
-    def setUp(self):
 
-        XXX=Currency.objects.create(
-            name='XXX'.upper(),
-            exchange=44,
-            fee_percentage=0.0015,
-            quantity=1000
-        )
-        XXX.save()
-        
 
+#La función de la clase Track_Fee es poder almacenar todas las transacciones
 class Track_Fee(models.Model):
     id_track_fee = models.AutoField(primary_key=True)
     fee_amount = models.FloatField()
