@@ -56,7 +56,7 @@ Cuando el software ya se encuentre desplegado podrás ver la documentación swag
 ```sh
 http://127.0.0.1:8000/swagger/
 ```
-
+![](assets/0_open_api.png)
 
 ## Uso de PG4 WEB
 Podras gestionar la base de datos con la siguiente url:
