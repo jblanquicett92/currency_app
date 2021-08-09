@@ -3,10 +3,8 @@ from .models import Currency, Track_Fee
 from django.db import transaction
 import datetime
 
-class CurrencyTestCase(TestCase):
+class TestCurrency(TestCase):
 
-    #Inicializo casos de prueba de monedas para 
-    #posterior validación
     def setUp(self):
 
         Currency.objects.create(
@@ -34,7 +32,7 @@ class CurrencyTestCase(TestCase):
             quantity=1000
         )
     
-    #Prueba unitaria que divisa se guarda en mayúsculas
+
     def test_upper_name(self):
 
        currency_A = Currency.objects.get(name='eur'.upper())
@@ -44,7 +42,7 @@ class CurrencyTestCase(TestCase):
        self.assertEqual(currency_B.name, "CHF")
               
 
-    #Prueba unitaria de porcentaje por transacción
+
     def test_exchange_rate(self):
 
         gbp = Currency.objects.get(name="GBP")
@@ -59,7 +57,7 @@ class CurrencyTestCase(TestCase):
         self.assertEqual(result_1, 0.028)
         self.assertEqual(result_2, 0.008)
 
-    #Prueba unitaria de intercambio de divisas
+
     def test_base_to_quote(self):
 
         gbp = Currency.objects.get(name="GBP")
@@ -78,7 +76,7 @@ class CurrencyTestCase(TestCase):
         self.assertEqual(result_3, 2.705)
         self.assertEqual(result_4, 0.847)
 
-    #Prueba unitaria de capacidad de intercambio de divisas
+
     def test_money_to_fulfill_request(self):
         
         request_1 = 80
@@ -117,20 +115,19 @@ class CurrencyTestCase(TestCase):
         base = Currency.objects.get(name="gbp".upper())
         quote = Currency.objects.get(name="eur".upper())
 
-        track_fee = self.create_track_fee(request_1, base, quote)
+        track_fee = TestCurrency.create_track_fee(request_1, base, quote)
         self.assertEqual(track_fee.fee_amount, 2.3632)
 
 
     #Algoritmo que calcula que tarifa se está calculando correctamente.
-    def calc_ex_rate(self, base_currency, quote_currency):
-
+    def calc_ex_rate(base_currency, quote_currency):
         fee = base_currency.fee_percentage+quote_currency.fee_percentage
         fee_cost = base_currency.exchange*fee
-        formatted_float = "{:.3f}".format(fee_cost)
+        formatted_float = "{:.4f}".format(fee_cost)
         return float(formatted_float)
     
     #Algoritmo que calcula que cambio de divisa
-    def calc_base_to_quote(self, base_currency, quote_currency):
+    def calc_base_to_quote(base_currency, quote_currency):
 
         base_to_quote = base_currency.exchange/quote_currency.exchange
         base_to_quote_float = "{:.3f}".format(base_to_quote)
@@ -138,46 +135,44 @@ class CurrencyTestCase(TestCase):
 
     #Algoritmo de calculo de capacidad de cambio de divisa
     @transaction.atomic
-    def calc_money_to_fulfill_request(self, money_request, base, quote):
+    def calc_money_to_fulfill_request(money_request, base, quote):
+        base_to_quote = TestCurrency.calc_base_to_quote(base, quote)
 
-        base_to_quote=self.calc_base_to_quote(base, quote)        
-        quote_request=base_to_quote*money_request
+        quote_request = base_to_quote*money_request
 
         new_base = Currency.objects.select_for_update().get(name=base.name)
         new_quote = Currency.objects.select_for_update().get(name=quote.name)
 
-        #Se asegura que la transacción cuente con propiedades de atomicidad
         with transaction.atomic():
 
-            new_base.quantity+=money_request
-            new_quote.quantity-=quote_request
+            new_base.quantity += money_request
+            new_quote.quantity -= quote_request
 
-            if new_quote.quantity <=0:
-                #regresa los valor de base y cotización sin actualizar
-                list_new_quantity = [new_base, new_quote]
+            if new_quote.quantity <= 0:
+                list_new_quantity = [new_base, new_quote, False]
                 return list_new_quantity
             else:
-
                 new_base.save()
                 new_quote.save()
-            
-            #regresa los valor de base y cotización actualizados
-            list_new_quantity = [new_base, new_quote]
-            return list_new_quantity
-    
+
+                list_new_quantity = [new_base, new_quote, True, quote_request]
+            # print(f'{new_quote.quantity} - {new_base.quantity}')
+                return list_new_quantity
+        
     #Algoritmo para crear un track_fee
-    def create_track_fee(self, money_request, base, quote):
+    def create_track_fee(money_request, base, quote):
 
         money_request_float_format = float(money_request)
         print(money_request_float_format)
 
-        fee_calc=self.calc_ex_rate(base, quote)
+        fee_calc = TestCurrency.calc_ex_rate(base, quote)
         fee_amount = base.exchange*money_request_float_format*fee_calc
         fee_amount_float_formatted = float("{:.4f}".format(fee_amount))
 
         tf = Track_Fee.objects.create(
             fee_amount=fee_amount_float_formatted,
             date_transaction=datetime.datetime.now(),
+            money_request=money_request_float_format,
             base_currency=base,
             quote_currency=quote
         )
